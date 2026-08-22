@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Dashboard | AJS Car Care</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0D10; --surface:#151A21; --surface-2:#1C222B; --border:rgba(255,255,255,0.1);
+    --text:#F5F7FA; --text-muted:#9AA4B2; --accent:#E4202D; --accent-soft:rgba(228,32,45,0.14); --amber:#F2A93B;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; padding:28px 24px 60px; }
+  .wrap{ max-width:1180px; margin:0 auto; }
+  .top{ display:flex; justify-content:space-between; align-items:center; margin-bottom:30px; flex-wrap:wrap; gap:14px; }
+  .brand{ display:flex; align-items:center; gap:10px; font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:18px; }
+  .brand-mark{ width:34px; height:34px; border-radius:9px; background:linear-gradient(135deg, var(--accent), #8C0F17); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; }
+  .btn{ padding:9px 16px; border-radius:999px; font-weight:600; font-size:13px; border:1px solid var(--border); background:var(--surface); color:var(--text); cursor:pointer; }
+  .btn:hover{ border-color:var(--accent); color:var(--accent); }
+
+  .stats-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:34px; }
+  @media (max-width:800px){ .stats-grid{ grid-template-columns:repeat(2,1fr); } }
+  .stat-card{ background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:20px 22px; }
+  .stat-card b{ display:block; font-family:'JetBrains Mono',monospace; font-size:26px; margin-bottom:4px; }
+  .stat-card span{ font-size:12.5px; color:var(--text-muted); }
+
+  .panel{ background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:24px; margin-bottom:24px; }
+  .panel h2{ font-family:'Space Grotesk',sans-serif; font-size:18px; margin:0 0 18px; }
+  .filters{ display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
+  .filters select, .filters input{ background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:8px 12px; color:var(--text); font-size:13px; }
+
+  table{ width:100%; border-collapse:collapse; font-size:13.5px; }
+  th{ text-align:left; padding:10px 12px; color:var(--text-muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; border-bottom:1px solid var(--border); }
+  td{ padding:12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  tr:hover td{ background:rgba(255,255,255,0.02); }
+  .status-select{ background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:6px 10px; color:var(--text); font-size:12.5px; }
+  .ref{ font-family:'JetBrains Mono',monospace; color:var(--amber); }
+  .empty{ text-align:center; color:var(--text-muted); padding:40px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand"><span class="brand-mark">AJ</span><span>Admin Dashboard</span></div>
+    <div style="display:flex; gap:10px;">
+      <a href="/index.html" class="btn" style="text-decoration:none;">View Site</a>
+      <button class="btn" id="logoutBtn">Log out</button>
+    </div>
+  </div>
+
+  <div class="stats-grid" id="statsGrid"></div>
+
+  <div class="panel">
+    <h2>All Bookings</h2>
+    <div class="filters">
+      <select id="statusFilter">
+        <option value="">All statuses</option>
+        <option value="pending_payment">Payment Pending</option>
+        <option value="confirmed">Confirmed</option>
+        <option value="completed">Completed</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+      <input type="date" id="dateFilter">
+      <button class="btn" id="clearFilters">Clear</button>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Ref</th><th>Customer</th><th>Service</th><th>Car</th><th>Date</th><th>Time</th><th>Amount</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="bookingsBody"></tbody>
+      </table>
+      <div class="empty" id="emptyState" style="display:none;">No bookings match these filters.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const token = localStorage.getItem('ajs_admin_token');
+  const user = JSON.parse(localStorage.getItem('ajs_admin_user') || 'null');
+  if(!token || !user || user.role !== 'admin'){ window.location.href = '/admin/login.html'; }
+
+  document.getElementById('logoutBtn').addEventListener('click', function(){
+    localStorage.removeItem('ajs_admin_token');
+    localStorage.removeItem('ajs_admin_user');
+    window.location.href = '/admin/login.html';
+  });
+
+  async function api(url){
+    const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'Request failed.');
+    return data;
+  }
+
+  const STATUS_LABELS = {
+    pending_payment: 'Payment Pending',
+    confirmed: 'Confirmed',
+    completed: 'Completed',
+    cancelled: 'Cancelled',
+  };
+
+  async function loadStats(){
+    try {
+      const data = await api('/api/admin/stats');
+      document.getElementById('statsGrid').innerHTML =
+        '<div class="stat-card"><b>' + data.totalBookings + '</b><span>Total bookings</span></div>' +
+        '<div class="stat-card"><b>' + data.confirmedToday + '</b><span>Confirmed for today</span></div>' +
+        '<div class="stat-card"><b>₹' + data.revenue.toLocaleString('en-IN') + '</b><span>Total revenue collected</span></div>' +
+        '<div class="stat-card"><b>' + data.totalCustomers + '</b><span>Registered customers</span></div>';
+    } catch(err){
+      if(err.message.includes('Session')) window.location.href = '/admin/login.html';
+    }
+  }
+
+  async function loadBookings(){
+    const status = document.getElementById('statusFilter').value;
+    const date = document.getElementById('dateFilter').value;
+    let url = '/api/admin/bookings?';
+    if(status) url += 'status=' + status + '&';
+    if(date) url += 'date=' + date + '&';
+
+    const body = document.getElementById('bookingsBody');
+    const empty = document.getElementById('emptyState');
+    try {
+      const data = await api(url);
+      if(data.bookings.length === 0){
+        body.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+      }
+      empty.style.display = 'none';
+      body.innerHTML = data.bookings.map(function(b){
+        const dateLabel = new Date(b.booking_date + 'T00:00:00').toLocaleDateString('en-IN', { day:'numeric', month:'short' });
+        return (
+          '<tr>' +
+            '<td class="ref">' + b.booking_ref + '</td>' +
+            '<td>' + b.customer_name + '<br><span style="color:var(--text-muted);font-size:12px;">' + b.phone + '</span></td>' +
+            '<td>' + b.service_name + '</td>' +
+            '<td>' + b.car_model + '</td>' +
+            '<td>' + dateLabel + '</td>' +
+            '<td>' + b.time_slot + '</td>' +
+            '<td>₹' + b.price.toLocaleString('en-IN') + '</td>' +
+            '<td>' +
+              '<select class="status-select" onchange="updateStatus(' + b.id + ', this.value)">' +
+                Object.keys(STATUS_LABELS).map(function(s){
+                  return '<option value="' + s + '"' + (s === b.status ? ' selected' : '') + '>' + STATUS_LABELS[s] + '</option>';
+                }).join('') +
+              '</select>' +
+            '</td>' +
+          '</tr>'
+        );
+      }).join('');
+    } catch(err){
+      body.innerHTML = '';
+      empty.style.display = 'block';
+      empty.textContent = err.message;
+    }
+  }
+
+  async function updateStatus(id, status){
+    try {
+      const res = await fetch('/api/admin/bookings/' + id + '/status', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ status: status }),
+      });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || 'Could not update.');
+      loadStats();
+    } catch(err){
+      alert(err.message);
+      loadBookings();
+    }
+  }
+
+  document.getElementById('statusFilter').addEventListener('change', loadBookings);
+  document.getElementById('dateFilter').addEventListener('change', loadBookings);
+  document.getElementById('clearFilters').addEventListener('click', function(){
+    document.getElementById('statusFilter').value = '';
+    document.getElementById('dateFilter').value = '';
+    loadBookings();
+  });
+
+  loadStats();
+  loadBookings();
+</script>
+</body>
+</html>
