@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Login | AJS Car Care</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0D10; --surface:#151A21; --surface-2:#1C222B; --border:rgba(255,255,255,0.1);
+    --text:#F5F7FA; --text-muted:#9AA4B2; --accent:#E4202D; --accent-soft:rgba(228,32,45,0.14);
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+  .card{ width:100%; max-width:420px; background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:40px 34px; }
+  .brand{ display:flex; align-items:center; gap:10px; font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:19px; margin-bottom:28px; }
+  .brand-mark{ width:36px; height:36px; border-radius:9px; background:linear-gradient(135deg, var(--accent), #8C0F17); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; }
+  h1{ font-family:'Space Grotesk',sans-serif; font-size:24px; margin:0 0 6px; }
+  p.sub{ color:var(--text-muted); font-size:14px; margin:0 0 26px; }
+  label{ display:block; font-size:13px; font-weight:600; color:var(--text-muted); margin-bottom:8px; }
+  input{ width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:12px 14px; color:var(--text); font-size:14.5px; margin-bottom:18px; }
+  input:focus{ outline:none; border-color:var(--accent); }
+  button{ width:100%; background:var(--accent); color:#fff; border:none; border-radius:999px; padding:14px; font-weight:700; font-size:15px; cursor:pointer; }
+  button:hover{ opacity:0.92; }
+  .error{ background:rgba(240,87,95,0.12); border:1px solid #F0575F; color:#F0575F; padding:10px 14px; border-radius:10px; font-size:13.5px; margin-bottom:18px; display:none; }
+  .footer-link{ text-align:center; margin-top:22px; font-size:14px; color:var(--text-muted); }
+  .footer-link a{ color:var(--accent); text-decoration:none; font-weight:600; }
+  .back{ display:inline-block; margin-bottom:20px; color:var(--text-muted); text-decoration:none; font-size:13.5px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <a href="/index.html" class="back">← Back to site</a>
+    <div class="brand"><span class="brand-mark">AJ</span><span>AJS Car Care</span></div>
+    <h1>Admin Login</h1>
+    <p class="sub">Restricted access — staff only.</p>
+
+    <div class="error" id="errorBox"></div>
+
+    <form id="loginForm">
+      <label for="email">Email</label>
+      <input type="email" id="email" required placeholder="you@example.com">
+      <label for="password">Password</label>
+      <input type="password" id="password" required placeholder="••••••••">
+      <button type="submit">Log In</button>
+    </form>
+
+    <div class="footer-link">Default: admin@ajscarcare.in / ChangeMe123! (change after first login)</div>
+  </div>
+
+<script>
+document.getElementById('loginForm').addEventListener('submit', async function(e){
+  e.preventDefault();
+  const errorBox = document.getElementById('errorBox');
+  errorBox.style.display = 'none';
+
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: document.getElementById('email').value,
+        password: document.getElementById('password').value,
+      }),
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'Login failed.');
+    if(data.user.role !== 'admin') throw new Error('This account does not have admin access.');
+
+    localStorage.setItem('ajs_admin_token', data.token);
+    localStorage.setItem('ajs_admin_user', JSON.stringify(data.user));
+    window.location.href = '/admin/dashboard.html';
+  } catch(err){
+    errorBox.textContent = err.message;
+    errorBox.style.display = 'block';
+  }
+});
+</script>
+</body>
+</html>
